@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+.ipynb_checkpoints/
+
+# data + outputs (never commit datasets or maps)
+data/
+datasets/
+outputs/
+maps/
+*.npz
+*.ply
+*.bag
