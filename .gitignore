@@ -6,11 +6,14 @@ venv/
 *.egg-info/
 .ipynb_checkpoints/
 
-# data + outputs (never commit datasets or maps)
-data/
-datasets/
-outputs/
-maps/
-*.npz
-*.ply
+# Datasets and outputs, never committed.
+# Leading slash matters: a bare "data/" also matches anchor/data/, which
+# silently excluded the entire dataset-loader module from the repo.
+/data/
+/datasets/
+/outputs/
+/out/
+/maps/
+*.tgz
 *.bag
+*.ply

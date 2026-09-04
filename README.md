@@ -15,12 +15,12 @@ Step 1 of N. Geometry foundations only — no relocalization yet.
 | Step | Contents | State |
 |---|---|---|
 | 1 | Camera model, SE(3), synthetic ground truth | done |
-| 2 | Dataset loaders (TUM RGB-D, EuRoC) + ATE/RPE evaluation | next |
-| 3 | Feature extraction and matching | |
+| 2 | TUM RGB-D loader + ATE/RPE evaluation harness | done |
+| 3 | Feature extraction and matching | next |
 | 4 | PnP + RANSAC | |
 | 5 | Pose refinement | |
 | 6 | Map construction and persistence | |
-| 7 | End-to-end relocalization + benchmark vs ORB-SLAM3 | |
+| 7 | End-to-end relocalization + EuRoC + benchmark vs ORB-SLAM3 | |
 | 8 | Phone AR rendering | |
 
 ## Design commitments
@@ -39,8 +39,23 @@ Step 1 of N. Geometry foundations only — no relocalization yet.
 
 ```
 anchor/geometry/   camera model, rotations, SE(3), synthetic scenes
+anchor/data/       trajectory container, TUM RGB-D loader
+anchor/eval/       Umeyama alignment, ATE/RPE, report figures
+scripts/           dataset sanity checks
 tests/             pytest suite, cross-checked against OpenCV
 docs/notes/        what each step does and why
+```
+
+## Datasets
+
+Not committed (`data/` is gitignored). To fetch the sequence the tests and
+scripts reference:
+
+```bash
+mkdir -p data && cd data
+curl -LO https://cvg.cit.tum.de/rgbd/dataset/freiburg1/rgbd_dataset_freiburg1_xyz.tgz
+tar -xzf rgbd_dataset_freiburg1_xyz.tgz
+cd .. && python scripts/check_tum_sequence.py data/rgbd_dataset_freiburg1_xyz
 ```
 
 ## Setup
@@ -53,3 +68,4 @@ pytest -q
 ## Notes
 
 - [01 — Geometry foundations](docs/notes/01-geometry-foundations.md)
+- [02 — Datasets and evaluation](docs/notes/02-datasets-and-evaluation.md)
