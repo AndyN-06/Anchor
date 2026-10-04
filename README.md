@@ -10,7 +10,7 @@ the cube is gone, because the phone has no idea where it is. Anchor fixes that.
 
 ## Status
 
-Step 1 of N. Geometry foundations only — no relocalization yet.
+Steps 1–2 done: geometry foundations, TUM loader and evaluation harness. No relocalization yet.
 
 | Step | Contents | State |
 |---|---|---|

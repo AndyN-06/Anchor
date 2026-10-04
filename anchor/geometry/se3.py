@@ -228,12 +228,76 @@ def relative_pose(T_world_a: SE3, T_world_b: SE3) -> SE3:
     return T_world_a.inverse() @ T_world_b
 
 
-def pose_error(T_est: SE3, T_gt: SE3) -> tuple[float, float]:
-    """(translation error in metres, rotation error in radians) between two poses.
+_POSE_CONVENTIONS = ("T_world_cam", "T_cam_world")
 
-    Both inputs must be in the *same* direction convention -- comparing a
-    ``T_world_cam`` against a ``T_cam_world`` produces a number, just not a
-    meaningful one.
+
+def camera_center(T: SE3, convention: str) -> np.ndarray:
+    """Camera centre in the reference frame, in metres.
+
+    ``convention`` says which direction ``T`` maps:
+
+    * ``"T_world_cam"`` (pose, camera-to-world): the centre is the camera-frame
+      origin pushed into the world, ``T * 0 = t``.
+    * ``"T_cam_world"`` (extrinsics, world-to-camera, what PnP returns): the
+      centre is the world point that lands on the camera origin,
+      ``R c + t = 0  =>  c = -R^T t``.
+
+    "world" stands for whatever reference frame the pose is in -- the map frame
+    during relocalization.
     """
-    delta = T_gt.inverse() @ T_est
-    return float(np.linalg.norm(delta.t)), float(np.linalg.norm(log_so3(delta.R)))
+    if convention == "T_world_cam":
+        return T.t.copy()
+    if convention == "T_cam_world":
+        return -T.R.T @ T.t
+    raise ValueError(f"convention must be one of {_POSE_CONVENTIONS}, got {convention!r}")
+
+
+def pose_error(T_est: SE3, T_gt: SE3, *, convention: str) -> tuple[float, float]:
+    """(camera-centre error in metres, rotation error in radians).
+
+    ``convention`` is required and keyword-only: ``"T_world_cam"`` or
+    ``"T_cam_world"``, describing *both* inputs. There is deliberately no
+    default, because the old version of this function had an implicit one.
+
+    Why the convention matters for translation and not for rotation
+    ---------------------------------------------------------------
+    **Translation** is reported as the distance between camera centres,
+    ``||c_est - c_gt||``. That is the physically meaningful number: how far the
+    estimate thinks the camera is from where it really was.
+
+    The tempting shortcut, ``||t_est - t_gt||`` on whatever was passed in, is
+    only that distance for poses. For extrinsics ``t = -R c``, so
+
+        t_est - t_gt = -(R_est c_est - R_gt c_gt)
+
+    which is nonzero even when the centres coincide and only the orientation is
+    wrong. Worked number: camera 3 m from the world origin, centre exactly
+    right, rotation off by 1 deg. Then ``||t_est - t_gt|| = 2 * 3 m * sin(0.5 deg)
+    = 5.2 cm`` of "translation error" that is entirely rotation error measured
+    with a 3 m lever arm. Its size depends on where the world origin happens to
+    be, which is arbitrary.
+
+    **Rotation** is the geodesic angle ``||log(R_est^T R_gt)||``, which is the
+    same in both conventions: for extrinsics the rotations are transposed, and
+    ``angle(R_est R_gt^T)`` equals ``angle(R_gt^T R_est)`` (conjugate by R_est)
+    which equals ``angle(R_est^T R_gt)`` (transpose). ``log_so3`` is used rather
+    than ``arccos((tr R - 1)/2)``, which loses precision near zero for the same
+    reason ``SE3.log`` did, and returns NaN when rounding pushes the trace
+    slightly above 3.
+
+    If both inputs carry frame labels they must agree, so comparing a
+    ``T_world_cam`` against a ``T_cam_world`` raises instead of returning a
+    plausible number.
+    """
+    if convention not in _POSE_CONVENTIONS:
+        raise ValueError(f"convention must be one of {_POSE_CONVENTIONS}, got {convention!r}")
+    for attr in ("to_frame", "from_frame"):
+        a, b = getattr(T_est, attr), getattr(T_gt, attr)
+        if a is not None and b is not None and a != b:
+            raise ValueError(
+                f"estimate is T_{T_est.to_frame}_{T_est.from_frame} but ground truth is "
+                f"T_{T_gt.to_frame}_{T_gt.from_frame}; invert one so they match")
+
+    d_t = float(np.linalg.norm(camera_center(T_est, convention) - camera_center(T_gt, convention)))
+    d_r = float(np.linalg.norm(log_so3(T_est.R.T @ T_gt.R)))
+    return d_t, d_r

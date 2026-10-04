@@ -109,7 +109,7 @@ def test_opencv_pnp_recovers_the_ground_truth_pose():
                                   flags=cv2.SOLVEPNP_ITERATIVE)
     assert ok
     T_est = SE3.from_rotvec(rvec.reshape(3), tvec.reshape(3))
-    d_t, d_r = pose_error(T_est, T_cam_world)
+    d_t, d_r = pose_error(T_est, T_cam_world, convention="T_cam_world")
     assert d_t < 1e-6, f"translation off by {d_t*1000:.3f} mm"
     assert np.degrees(d_r) < 1e-4, f"rotation off by {np.degrees(d_r):.5f} deg"
 
@@ -124,6 +124,6 @@ def test_pnp_degrades_gracefully_with_noise_not_catastrophically():
     ok, rvec, tvec = cv2.solvePnP(pts[obs.point_ids], obs.uv, CAM.K, CAM.dist)
     assert ok
     d_t, d_r = pose_error(SE3.from_rotvec(rvec.reshape(3), tvec.reshape(3)),
-                          T_world_cam.inverse())
+                          T_world_cam.inverse(), convention="T_cam_world")
     assert d_t < 0.02
     assert np.degrees(d_r) < 0.5

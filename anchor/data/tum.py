@@ -217,9 +217,11 @@ class TUMDataset:
         gives a ray (undistorted, so the geometry is right), and depth gives how
         far along it to stop.  ``z`` in the depth image is the *depth along the
         optical axis*, not the distance along the ray, so the ray is scaled to
-        unit z before multiplying -- using a unit-length ray instead makes every
-        point too far away by a factor of ``1/cos(angle from axis)``, up to about
-        11% at the corners of a 60-degree lens.
+        unit z before multiplying -- using a unit-length ray instead puts every
+        point too *close*, at ``cos(angle from axis)`` of its true depth. For the
+        fr1 intrinsics that is 10% short at the top/bottom edge centres, 14% at
+        the left/right edge centres and 20% at the corners (ray norms 1.11, 1.17,
+        1.25 measured from ``pixel_to_ray``).
         """
         depth = self.load_depth(i)
         vs, us = np.mgrid[0:depth.shape[0]:stride, 0:depth.shape[1]:stride]

@@ -14,7 +14,7 @@ from .rotations import (
     skew,
     unskew,
 )
-from .se3 import SE3, pose_error, relative_pose
+from .se3 import SE3, camera_center, pose_error, relative_pose
 from .synthetic import (
     Observations,
     SyntheticScene,
@@ -26,7 +26,7 @@ from .synthetic import (
 )
 
 __all__ = [
-    "PinholeCamera", "SE3", "pose_error", "relative_pose",
+    "PinholeCamera", "SE3", "camera_center", "pose_error", "relative_pose",
     "skew", "unskew", "exp_so3", "log_so3", "is_rotation", "project_to_so3",
     "quat_wxyz_to_rot", "rot_to_quat_wxyz", "quat_xyzw_to_rot", "rot_to_quat_xyzw",
     "angle_between_rotations",
