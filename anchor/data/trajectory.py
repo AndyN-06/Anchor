@@ -29,7 +29,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ..geometry.rotations import quat_xyzw_to_rot, rot_to_quat_xyzw
+from ..geometry.rotations import exp_so3, log_so3, quat_xyzw_to_rot, rot_to_quat_xyzw
 from ..geometry.se3 import SE3
 
 
@@ -181,3 +181,48 @@ def associate(stamps_a: np.ndarray, stamps_b: np.ndarray,
         pairs.append((i, j))
     pairs.sort()
     return np.array(pairs, dtype=int)
+
+
+def interpolate_pose(traj: Trajectory, t: float, max_gap: float = 0.05) -> SE3 | None:
+    """``T_world_cam`` at time ``t``, interpolated between the bracketing samples.
+
+    Rotation moves along the geodesic between the two samples at constant
+    angular rate, ``R = R0 exp(a log(R0^T R1))``; that is SLERP written on
+    matrices. Translation is linear. For 10 ms mocap intervals the difference
+    from a full SE(3) geodesic (``T0 exp(a log(T0^-1 T1))``, which curves the
+    translation path) is far below the mocap's own noise.
+
+    Returns None outside the trajectory's time span or across a gap longer
+    than ``max_gap`` seconds -- interpolating across a mocap dropout invents a
+    pose the camera may never have had.
+    """
+    ts = traj.timestamps
+    if len(ts) == 0 or t < ts[0] or t > ts[-1]:
+        return None
+    k = int(np.searchsorted(ts, t, side="right"))
+    if k == len(ts):                       # t == last timestamp
+        return traj.poses[-1]
+    t0, t1 = ts[k - 1], ts[k]
+    if t1 - t0 > max_gap:
+        return None
+    a = 0.0 if t1 == t0 else (t - t0) / (t1 - t0)
+    P0, P1 = traj.poses[k - 1], traj.poses[k]
+    R = P0.R @ exp_so3(a * log_so3(P0.R.T @ P1.R))
+    return SE3(R, (1.0 - a) * P0.t + a * P1.t, P0.to_frame, P0.from_frame)
+
+
+def camera_speed(traj: Trajectory, t: float, h: float = 0.02) -> tuple[float, float] | None:
+    """(linear speed m/s, angular speed rad/s) at time ``t``, by central difference over ±h.
+
+    Angular speed is what limits how far ground truth can be trusted at a
+    given frame: any timing error dt between image and pose becomes a
+    rotation error of ``omega * dt``, which moves every pixel by about
+    ``f * omega * dt`` regardless of depth. At fr1's f = 517 px and 30 deg/s,
+    a 4 ms timing error is already 1 px.
+    """
+    a, b = interpolate_pose(traj, t - h), interpolate_pose(traj, t + h)
+    if a is None or b is None:
+        return None
+    lin = float(np.linalg.norm(b.t - a.t) / (2 * h))
+    ang = float(np.linalg.norm(log_so3(a.R.T @ b.R)) / (2 * h))
+    return lin, ang
