@@ -42,7 +42,15 @@ class Features:
 
     def subset(self, idx) -> "Features":
         """Features restricted to ``idx`` (index array or boolean mask), same order."""
-        raise NotImplementedError
+        return Features(
+            uv=self.uv[idx],
+            xn=self.xn[idx],
+            desc=self.desc[idx],
+            scale=self.scale[idx],
+            angle=self.angle[idx],
+            response=self.response[idx],
+            kind=self.kind,
+        )
 
 
 def detect_and_describe(gray: np.ndarray, n_features: int = 2000, detector: str = "sift"):
@@ -53,7 +61,38 @@ def detect_and_describe(gray: np.ndarray, n_features: int = 2000, detector: str 
     with no keypoints must return empty arrays with the right shapes
     ((0, 2), (0, D), ...), not ``None`` -- OpenCV returns ``None`` there.
     """
-    raise NotImplementedError
+
+    import cv2
+
+    det = detector.lower()
+    if det in ("sift", "rootsift"):
+        cv_det = cv2.SIFT_create(nfeatures=n_features)
+        D, dtype = 128, np.float32
+    elif det == "orb":
+        cv_det = cv2.ORB_create(nfeatures=n_features)
+        D, dtype = 32, np.uint8
+    else:
+        raise ValueError(f"Unknown detector {detector!r}")
+
+    kps, descs = cv_det.detectAndCompute(gray, None)
+
+    if not kps:
+        return (
+            np.empty((0, 2), dtype=np.float64),
+            np.empty((0, D), dtype=dtype),
+            np.empty((0,), dtype=np.float64),
+            np.empty((0,), dtype=np.float64),
+            np.empty((0,), dtype=np.float64),
+        )
+
+    uv = np.array([[kp.pt[0], kp.pt[1]] for kp in kps], dtype=np.float64)
+    scale = np.array([kp.size for kp in kps], dtype=np.float64)
+    angle = np.array([kp.angle for kp in kps], dtype=np.float64)
+    response = np.array([kp.response for kp in kps], dtype=np.float64)
+    if descs is None:
+        descs = np.empty((0, D), dtype=dtype)
+
+    return uv, descs, scale, angle, response
 
 
 def rootsift(desc: np.ndarray, eps: float = 1e-12) -> np.ndarray:
@@ -66,7 +105,10 @@ def rootsift(desc: np.ndarray, eps: float = 1e-12) -> np.ndarray:
 
     Decide what an all-zero descriptor becomes (``eps`` guards the division).
     """
-    raise NotImplementedError
+    desc = np.asarray(desc, dtype=np.float32)
+    l1 = np.sum(np.abs(desc), axis=1, keepdims=True)
+    l1 = np.maximum(l1, eps)
+    return np.sqrt(desc / l1).astype(np.float32)
 
 
 def extract(gray: np.ndarray, camera: PinholeCamera, n_features: int = 2000,
@@ -76,4 +118,13 @@ def extract(gray: np.ndarray, camera: PinholeCamera, n_features: int = 2000,
     ``camera`` must be the intrinsics for *this* image's resolution. Fills
     ``xn`` with ``camera.pixel_to_normalized(uv)``.
     """
-    raise NotImplementedError
+    uv, desc, scale, angle, response = detect_and_describe(gray, n_features, detector)
+    xn = camera.pixel_to_normalized(uv)
+
+    kind = detector.lower()
+    if root_sift and kind == "sift":
+        desc = rootsift(desc)
+        kind = "rootsift"
+
+    return Features(uv=uv, xn=xn, desc=desc, scale=scale, angle=angle,
+                    response=response, kind=kind)
